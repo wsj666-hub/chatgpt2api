@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from threading import Condition, Lock
@@ -14,6 +15,7 @@ from services.log_service import (
 )
 from services.storage.base import StorageBackend
 from utils.helper import anonymize_token
+from utils.log import logger
 
 
 EXPORT_TIMEZONE = timezone(timedelta(hours=8))
@@ -152,18 +154,14 @@ class AccountService:
             self._image_slot_condition.notify_all()
 
     def get_available_access_token(self) -> str:
-        attempted_tokens: set[str] = set()
-        while True:
-            access_token = self._acquire_next_candidate_token(excluded_tokens=attempted_tokens)
-            attempted_tokens.add(access_token)
-            try:
-                account = self.fetch_remote_info(access_token, "get_available_access_token")
-            except Exception:
-                self.release_image_slot(access_token)
-                continue
-            if self._is_image_account_available(account or {}):
-                return access_token
-            self.release_image_slot(access_token)
+        acquire_started = time.time()
+        access_token = self._acquire_next_candidate_token()
+        logger.info({
+            "event": "image_token_acquire",
+            "token": anonymize_token(access_token),
+            "duration_ms": int((time.time() - acquire_started) * 1000),
+        })
+        return access_token
 
     def get_text_access_token(self, excluded_tokens: set[str] | None = None) -> str:
         excluded = set(excluded_tokens or set())

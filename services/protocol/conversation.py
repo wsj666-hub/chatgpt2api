@@ -648,6 +648,7 @@ def stream_image_outputs_with_pool(request: ConversationRequest) -> Iterator[Ima
                 account_service.mark_image_result(token, True)
                 break
             except ImagePollTimeoutError:
+                account_service.mark_image_result(token, False)
                 raise
             except ImageGenerationError:
                 account_service.mark_image_result(token, False)
